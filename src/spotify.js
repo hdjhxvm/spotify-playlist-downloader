@@ -47,35 +47,51 @@ async function getPlaylistInfo(url) {
   const response = await HTTP_CLIENT.get(embedUrl);
   const html = response.data;
 
-  // Extract JSON payload embedded inside Spotify <script id="initial-state">
-  const scriptMatch = html.match(/<script id="initial-state" type="text\/plain">(.*?)<\/script>/);
-  
+  // Extract JSON payload embedded inside Spotify HTML embed (<script id="__NEXT_DATA__"> or <script id="initial-state">)
+  let stateData = null;
+  const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/);
+  if (nextDataMatch) {
+    try {
+      stateData = JSON.parse(nextDataMatch[1]);
+    } catch (e) {}
+  }
+
+  if (!stateData) {
+    const scriptMatch = html.match(/<script id="initial-state" type="text\/plain">(.*?)<\/script>/);
+    if (scriptMatch) {
+      try {
+        const decodedJson = Buffer.from(scriptMatch[1], 'base64').toString('utf-8');
+        stateData = JSON.parse(decodedJson);
+      } catch (e) {}
+    }
+  }
+
   let playlistTitle = `${type.toUpperCase()} ${id}`;
   let coverUrl = '';
   let tracks = [];
 
-  if (scriptMatch) {
+  if (stateData) {
     try {
-      const decodedJson = Buffer.from(scriptMatch[1], 'base64').toString('utf-8');
-      const stateData = JSON.parse(decodedJson);
-      
-      const entity = stateData?.data?.entity || stateData?.entity;
+      const entity = stateData?.props?.pageProps?.state?.data?.entity || stateData?.data?.entity || stateData?.entity;
       if (entity) {
         playlistTitle = entity.name || playlistTitle;
-        coverUrl = entity.coverArt?.sources?.[0]?.url || entity.images?.[0]?.url || '';
+        coverUrl = entity.coverArt?.sources?.[0]?.url || entity.images?.[0]?.url || entity.visualIdentity?.image?.[0]?.url || '';
 
         const itemList = entity.trackList || entity.tracksList || entity.tracks?.items || [];
         
         tracks = itemList.map((item, idx) => {
           const trackData = item.track || item;
-          const artists = trackData.artists || trackData.artistsList || [];
-          const artistName = Array.isArray(artists) 
-            ? artists.map(a => typeof a === 'string' ? a : a.name).join(', ') 
-            : 'Unknown Artist';
+          const artists = trackData.artists || trackData.artistsList;
+          let artistName = 'Unknown Artist';
+          if (trackData.subtitle) {
+            artistName = trackData.subtitle;
+          } else if (Array.isArray(artists)) {
+            artistName = artists.map(a => typeof a === 'string' ? a : a.name).join(', ');
+          }
 
           return {
-            id: trackData.id || `track_${idx}`,
-            title: trackData.name || trackData.title || 'Unknown Track',
+            id: trackData.id || (trackData.uri ? trackData.uri.split(':').pop() : `track_${idx}`),
+            title: trackData.title || trackData.name || 'Unknown Track',
             artist: artistName,
             album: trackData.album?.name || entity.name || 'Spotify Playlist',
             releaseYear: trackData.album?.release_date ? trackData.album.release_date.split('-')[0] : '',

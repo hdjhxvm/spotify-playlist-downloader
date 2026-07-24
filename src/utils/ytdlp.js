@@ -48,7 +48,7 @@ async function ensureYtDlp() {
 
   fs.writeFileSync(YTDLP_PATH, response.data);
   if (process.platform !== 'win32') {
-    fs.chmodSync(YTDLP_PATH, 0755);
+    fs.chmodSync(YTDLP_PATH, 0o755);
   }
 
   console.log(`[Auto-Setup] yt-dlp ready at ${YTDLP_PATH}`);
@@ -56,10 +56,33 @@ async function ensureYtDlp() {
 }
 
 /**
+ * Returns path to ffmpeg binary (from ffmpeg-static, local vendor, or system PATH).
+ */
+function getFfmpegPath() {
+  try {
+    const ffmpegStatic = require('ffmpeg-static');
+    if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+      return ffmpegStatic;
+    }
+  } catch (e) {}
+
+  const vendorFfmpeg = process.platform === 'win32'
+    ? path.join(VENDOR_DIR, 'ffmpeg.exe')
+    : path.join(VENDOR_DIR, 'ffmpeg');
+
+  if (fs.existsSync(vendorFfmpeg)) {
+    return vendorFfmpeg;
+  }
+
+  return null;
+}
+
+/**
  * Searches and downloads audio stream using yt-dlp.
  */
 async function downloadAudioStream(searchQuery, outputPath, quality = '320k') {
   const binaryPath = await ensureYtDlp();
+  const ffmpegPath = getFfmpegPath();
 
   return new Promise((resolve, reject) => {
     const args = [
@@ -72,6 +95,10 @@ async function downloadAudioStream(searchQuery, outputPath, quality = '320k') {
       '--quiet',
       '--no-warnings'
     ];
+
+    if (ffmpegPath) {
+      args.push('--ffmpeg-location', ffmpegPath);
+    }
 
     const child = spawn(binaryPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 

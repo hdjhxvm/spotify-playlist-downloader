@@ -5,6 +5,10 @@ const { fetchLyrics } = require('./lyrics');
 const { downloadAudioStream } = require('./utils/ytdlp');
 const { applyTags } = require('./tagger');
 
+function sanitizeFilename(str) {
+  return (str || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+}
+
 /**
  * Downloads a single track given its metadata.
  */
@@ -19,7 +23,7 @@ async function downloadTrack(track, options = {}) {
   }
 
   // Clean filename
-  const safeFilename = `${track.artist} - ${track.title}`.replace(/[\\/:*?"<>|]/g, '_');
+  const safeFilename = sanitizeFilename(`${track.artist} - ${track.title}`);
   const mp3Path = path.join(outputDir, `${safeFilename}.mp3`);
   const lrcPath = path.join(outputDir, `${safeFilename}.lrc`);
 
@@ -80,9 +84,10 @@ async function downloadPlaylist(spotifyUrl, options = {}) {
   const total = playlistInfo.tracks.length;
   const results = [];
 
+  const sanitizedTitle = sanitizeFilename(playlistInfo.title);
   const targetDir = options.outputDir 
-    ? path.join(options.outputDir, playlistInfo.title.replace(/[\\/:*?"<>|]/g, '_'))
-    : path.join(process.cwd(), 'downloads', playlistInfo.title.replace(/[\\/:*?"<>|]/g, '_'));
+    ? path.join(options.outputDir, sanitizedTitle)
+    : path.join(process.cwd(), 'downloads', sanitizedTitle);
 
   for (let i = 0; i < total; i++) {
     const track = playlistInfo.tracks[i];
