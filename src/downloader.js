@@ -70,8 +70,9 @@ async function downloadTrack(track, options = {}) {
     }
 
     // 1. Download audio stream via yt-dlp
-    const searchQuery = `${track.artist} - ${track.title} official audio`;
-    await downloadAudioStream(searchQuery, mp3Path, quality);
+    // Exclude common bad keywords via yt-dlp search filter
+    const searchQuery = `${track.artist} - ${track.title} official audio -remix -live -cover`;
+    await downloadAudioStream(searchQuery, mp3Path, quality, { durationMs: track.durationMs });
 
     if (options.onProgress) {
       options.onProgress({ track, status: 'fetching_lyrics', percent: 60 });

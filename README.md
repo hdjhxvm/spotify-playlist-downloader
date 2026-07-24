@@ -18,6 +18,26 @@ Designed for both **CLI power-users** and **Mobile/Web App developers** looking 
 - ⚡ **Zero Spotify API Key Required**: Works out-of-the-box with public Spotify links.
 - 📱 **Mobile & Backend Ready**: Exports clean JavaScript / TypeScript async API with progress callbacks (`onProgress`).
 - 🤖 **Auto-Vendor Binary Setup**: Automatically downloads standalone `yt-dlp` binary if not present on your system.
+- 🚀 **Enterprise-Grade Performance**: Smart duration matching and `yt-dlp` RAM optimization for downloading 400+ tracks efficiently.
+
+---
+
+## 🔑 Downloading Large Playlists (>100 tracks)
+
+By default, the script fetches tracks using Spotify's public embed page, which limits playlists to the first **100 tracks**. 
+To bypass this limit and download playlists of any size (e.g. 400+ tracks), provide official Spotify API credentials via environment variables:
+
+```bash
+# Windows (PowerShell)
+$env:SPOTIFY_CLIENT_ID="your_client_id"
+$env:SPOTIFY_CLIENT_SECRET="your_client_secret"
+
+# Linux / macOS
+export SPOTIFY_CLIENT_ID="your_client_id"
+export SPOTIFY_CLIENT_SECRET="your_client_secret"
+```
+
+You can get these keys for free by creating an app on the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
 
 ---
 

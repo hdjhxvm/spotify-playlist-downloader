@@ -140,9 +140,19 @@ async function downloadAudioStream(searchQuery, outputPath, quality = '320k', op
       '--audio-quality', quality.replace('k', ''),
       '-o', outputPath,
       '--no-playlist',
+      '--no-cache-dir',
+      '--no-mtime',
       '--quiet',
       '--no-warnings'
     ];
+
+    if (options.durationMs) {
+      const durationSec = Math.round(options.durationMs / 1000);
+      // Tolerance of 30 seconds to allow for music video intros/outros but block 10 min compilations
+      const minDuration = Math.max(0, durationSec - 15);
+      const maxDuration = durationSec + 30;
+      args.push('--match-filter', `duration >= ${minDuration} & duration <= ${maxDuration}`);
+    }
 
     if (ffmpegDir) {
       args.push('--ffmpeg-location', ffmpegDir);

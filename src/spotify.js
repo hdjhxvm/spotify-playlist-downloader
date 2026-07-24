@@ -26,6 +26,89 @@ function parseSpotifyUrl(url) {
 }
 
 /**
+ * Gets an official Spotify API token using Client Credentials Flow.
+ */
+async function getOfficialApiToken() {
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  try {
+    const response = await axios.post('https://accounts.spotify.com/api/token', 'grant_type=client_credentials', {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
+      }
+    });
+    return response.data.access_token;
+  } catch (e) {
+    log.warn('spotify', `Failed to get official API token: ${e.message}`);
+    return null;
+  }
+}
+
+/**
+ * Fetches all tracks of a playlist using official API (handles pagination).
+ */
+async function fetchFullPlaylistWithToken(id, token) {
+  let tracks = [];
+  let nextUrl = `https://api.spotify.com/v1/playlists/${id}/tracks?limit=100&offset=0`;
+  let playlistData = null;
+
+  // First fetch to get playlist metadata
+  try {
+    const plRes = await axios.get(`https://api.spotify.com/v1/playlists/${id}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    playlistData = plRes.data;
+  } catch (e) {
+    throw new Error(`Failed to fetch playlist metadata via API: ${e.message}`);
+  }
+
+  // Paginate tracks
+  while (nextUrl) {
+    try {
+      const res = await axios.get(nextUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      const pageItems = res.data.items || [];
+      const pageTracks = pageItems.map((item, idx) => {
+        const trackData = item.track || item;
+        const artists = trackData.artists || [];
+        const artistName = artists.map(a => a.name).join(', ') || 'Unknown Artist';
+
+        return {
+          id: trackData.id || `track_${idx}`,
+          title: trackData.name || 'Unknown Track',
+          artist: artistName,
+          album: trackData.album?.name || playlistData.name || 'Spotify Playlist',
+          releaseYear: trackData.album?.release_date ? trackData.album.release_date.split('-')[0] : '',
+          durationMs: trackData.duration_ms || 0,
+          coverUrl: trackData.album?.images?.[0]?.url || playlistData.images?.[0]?.url || '',
+          isrc: trackData.external_ids?.isrc || ''
+        };
+      });
+      
+      tracks.push(...pageTracks);
+      nextUrl = res.data.next;
+    } catch (e) {
+      log.warn('spotify', `Failed to fetch tracks page via API: ${e.message}`);
+      break;
+    }
+  }
+
+  return {
+    id,
+    title: playlistData.name || `PLAYLIST ${id}`,
+    description: playlistData.description || 'Spotify Playlist',
+    totalTracks: tracks.length,
+    coverUrl: playlistData.images?.[0]?.url || '',
+    tracks
+  };
+}
+
+/**
  * Fetches metadata for Spotify Playlist, Album, or Single Track.
  */
 async function getPlaylistInfo(url) {
@@ -43,7 +126,18 @@ async function getPlaylistInfo(url) {
     };
   }
 
-  // Fetch playlist / album webpage embed data
+  // 1. Try Official API first if credentials are provided (supports 400+ tracks)
+  const officialToken = await getOfficialApiToken();
+  if (officialToken && type === 'playlist') {
+    log.info('spotify', 'Using official Spotify API to fetch playlist (Supports unlimited tracks)');
+    return await fetchFullPlaylistWithToken(id, officialToken);
+  }
+
+  if (type === 'playlist') {
+    log.warn('spotify', 'SPOTIFY_CLIENT_ID not found. Falling back to public embed page (Limited to first 100 tracks).');
+  }
+
+  // 2. Fetch playlist / album webpage embed data (Fallback)
   const embedUrl = `https://open.spotify.com/embed/${type}/${id}`;
   const response = await HTTP_CLIENT.get(embedUrl);
   const html = response.data;

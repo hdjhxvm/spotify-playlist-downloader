@@ -48,6 +48,12 @@ program
       const playlist = await getPlaylistInfo(url);
       spinner.succeed(chalk.green(`Found ${chalk.bold(playlist.title)} (${playlist.totalTracks} tracks)\n`));
 
+      if (playlist.totalTracks === 100 && (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET)) {
+        console.log(chalk.yellow('⚠️  Warning: Playlist appears to be capped at 100 tracks (Public Embed API limit).'));
+        console.log(chalk.yellow('   To download playlists with 400+ tracks, set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in your environment.'));
+        console.log(chalk.yellow('   Get them for free at: https://developer.spotify.com/dashboard \n'));
+      }
+
       const downloadOpts = {
         outputDir: path.resolve(options.output),
         quality: options.quality,
