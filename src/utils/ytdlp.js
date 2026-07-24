@@ -148,9 +148,9 @@ async function downloadAudioStream(searchQuery, outputPath, quality = '320k', op
 
     if (options.durationMs) {
       const durationSec = Math.round(options.durationMs / 1000);
-      // Tolerance of 30 seconds to allow for music video intros/outros but block 10 min compilations
-      const minDuration = Math.max(0, durationSec - 15);
-      const maxDuration = durationSec + 30;
+      // Tolerance to allow for music video intros/outros (-25s, +60s)
+      const minDuration = Math.max(0, durationSec - 25);
+      const maxDuration = durationSec + 60;
       args.push('--match-filter', `duration >= ${minDuration} & duration <= ${maxDuration}`);
     }
 

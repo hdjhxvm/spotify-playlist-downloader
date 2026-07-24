@@ -70,8 +70,8 @@ async function downloadTrack(track, options = {}) {
     }
 
     // 1. Download audio stream via yt-dlp
-    // Exclude common bad keywords via yt-dlp search filter
-    const searchQuery = `${track.artist} - ${track.title} official audio -remix -live -cover`;
+    // Use Spotify's precise duration to filter out compilations, no need for aggressive keyword exclusion
+    const searchQuery = `${track.artist} ${track.title} official audio`;
     await downloadAudioStream(searchQuery, mp3Path, quality, { durationMs: track.durationMs });
 
     if (options.onProgress) {
