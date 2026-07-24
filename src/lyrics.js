@@ -1,4 +1,5 @@
 const axios = require('axios');
+const log = require('./utils/logger');
 
 /**
  * LRCLIB Network Lyrics Client
@@ -30,6 +31,7 @@ async function fetchLyrics(trackName, artistName, albumName = '') {
     }
   } catch (err) {
     // If exact match fails, try fuzzy search
+    log.debug('lyrics', `Exact match failed for "${trackName}" by "${artistName}", trying fuzzy search`);
     try {
       const searchRes = await axios.get(`${LRCLIB_BASE_URL}/search`, {
         params: { q: `${trackName} ${artistName}` },
@@ -44,7 +46,7 @@ async function fetchLyrics(trackName, artistName, albumName = '') {
         };
       }
     } catch (searchErr) {
-      // Ignore search error
+      log.warn('lyrics', `Fuzzy search also failed for "${trackName}": ${searchErr.message}`);
     }
   }
 

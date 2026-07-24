@@ -1,6 +1,7 @@
 const fs = require('fs');
 const axios = require('axios');
 const NodeID3 = require('node-id3');
+const log = require('./utils/logger');
 
 /**
  * ID3 Tagging Engine
@@ -18,8 +19,9 @@ async function applyTags(mp3FilePath, trackMetadata, lyrics = null) {
         timeout: 8000
       });
       coverBuffer = Buffer.from(imageResponse.data);
+      log.debug('tagger', `Cover art downloaded (${coverBuffer.length} bytes)`);
     } catch (e) {
-      // Ignore image download error
+      log.warn('tagger', `Cover art download failed for "${trackMetadata.title}": ${e.message}`);
     }
   }
 

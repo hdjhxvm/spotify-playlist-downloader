@@ -35,6 +35,7 @@ export interface DownloadOptions {
   embedLyrics?: boolean;
   saveLrcFile?: boolean;
   concurrent?: number;
+  maxRetries?: number;
   onProgress?: (progress: {
     track: TrackMetadata;
     status: 'fetching' | 'downloading' | 'converting' | 'tagging' | 'completed' | 'failed';

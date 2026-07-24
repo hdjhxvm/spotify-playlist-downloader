@@ -4,9 +4,35 @@ const { getPlaylistInfo } = require('./spotify');
 const { fetchLyrics } = require('./lyrics');
 const { downloadAudioStream } = require('./utils/ytdlp');
 const { applyTags } = require('./tagger');
+const log = require('./utils/logger');
 
+const VALID_QUALITIES = ['128k', '192k', '256k', '320k'];
+
+// Windows reserved filenames
+const RESERVED_NAMES = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
+const MAX_FILENAME_LENGTH = 200;
+
+/**
+ * Sanitizes a string for use as a filename on all platforms.
+ * Handles illegal characters, Windows reserved names, trailing dots, and length limits.
+ */
 function sanitizeFilename(str) {
-  return (str || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+  let safe = (str || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+
+  // Remove trailing dots and spaces (Windows doesn't allow them)
+  safe = safe.replace(/[.\s]+$/, '');
+
+  // Handle Windows reserved names
+  if (RESERVED_NAMES.test(safe)) {
+    safe = `_${safe}`;
+  }
+
+  // Truncate if too long
+  if (safe.length > MAX_FILENAME_LENGTH) {
+    safe = safe.substring(0, MAX_FILENAME_LENGTH);
+  }
+
+  return safe || 'untitled';
 }
 
 /**
@@ -17,6 +43,11 @@ async function downloadTrack(track, options = {}) {
   const quality = options.quality || '320k';
   const embedLyrics = options.embedLyrics !== false;
   const saveLrcFile = options.saveLrcFile !== false;
+
+  // Validate quality
+  if (!VALID_QUALITIES.includes(quality)) {
+    throw new Error(`Invalid quality "${quality}". Supported: ${VALID_QUALITIES.join(', ')}`);
+  }
 
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -29,6 +60,7 @@ async function downloadTrack(track, options = {}) {
 
   // Skip download if already exists
   if (fs.existsSync(mp3Path)) {
+    log.debug('downloader', `Skipping (already exists): ${safeFilename}`);
     return { track, success: true, filePath: mp3Path, skipped: true };
   }
 
@@ -77,37 +109,85 @@ async function downloadTrack(track, options = {}) {
 }
 
 /**
- * Downloads an entire Spotify playlist.
+ * Simple Promise pool — runs tasks with limited concurrency.
+ * @param {Array<() => Promise>} tasks - Array of functions that return promises
+ * @param {number} concurrency - Max number of parallel tasks
+ * @returns {Promise<Array>} - Results in original order
+ */
+async function promisePool(tasks, concurrency) {
+  const results = new Array(tasks.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < tasks.length) {
+      const i = nextIndex++;
+      results[i] = await tasks[i]();
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, tasks.length) },
+    () => worker()
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * Delays execution for a given number of milliseconds.
+ */
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Downloads an entire Spotify playlist with concurrent downloads and retry logic.
  */
 async function downloadPlaylist(spotifyUrl, options = {}) {
   const playlistInfo = await getPlaylistInfo(spotifyUrl);
   const total = playlistInfo.tracks.length;
-  const results = [];
+  const concurrent = options.concurrent || 3;
+  const maxRetries = options.maxRetries ?? 1;
 
   const sanitizedTitle = sanitizeFilename(playlistInfo.title);
   const targetDir = options.outputDir 
     ? path.join(options.outputDir, sanitizedTitle)
     : path.join(process.cwd(), 'downloads', sanitizedTitle);
 
-  for (let i = 0; i < total; i++) {
-    const track = playlistInfo.tracks[i];
-    
-    if (options.onTrackStart) {
-      options.onTrackStart(track, i + 1, total);
-    }
+  log.debug('downloader', `Downloading ${total} tracks (concurrency: ${concurrent}, retries: ${maxRetries})`);
 
-    const res = await downloadTrack(track, { ...options, outputDir: targetDir });
-    results.push(res);
+  const tasks = playlistInfo.tracks.map((track, i) => {
+    return async () => {
+      if (options.onTrackStart) {
+        options.onTrackStart(track, i + 1, total);
+      }
 
-    if (options.onTrackEnd) {
-      options.onTrackEnd(track, res.success, res.filePath, res.error);
-    }
-  }
+      let res = await downloadTrack(track, { ...options, outputDir: targetDir });
 
+      // Retry logic for failed tracks
+      if (!res.success && maxRetries > 0) {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          log.warn('downloader', `Retry ${attempt}/${maxRetries} for "${track.title}"`);
+          await delay(2000 * attempt); // exponential backoff: 2s, 4s, ...
+          res = await downloadTrack(track, { ...options, outputDir: targetDir });
+          if (res.success) break;
+        }
+      }
+
+      if (options.onTrackEnd) {
+        options.onTrackEnd(track, res.success, res.filePath, res.error);
+      }
+
+      return res;
+    };
+  });
+
+  const results = await promisePool(tasks, concurrent);
   return results;
 }
 
 module.exports = {
   downloadTrack,
-  downloadPlaylist
+  downloadPlaylist,
+  sanitizeFilename // exported for testing
 };

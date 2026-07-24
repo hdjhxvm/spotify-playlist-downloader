@@ -1,4 +1,5 @@
 const axios = require('axios');
+const log = require('./utils/logger');
 
 /**
  * Spotify Network Metadata Extractor
@@ -8,7 +9,7 @@ const axios = require('axios');
 const HTTP_CLIENT = axios.create({
   timeout: 10000,
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/137.0.0.0 Safari/537.36',
     'Accept-Language': 'en-US,en;q=0.9'
   }
 });
@@ -53,7 +54,10 @@ async function getPlaylistInfo(url) {
   if (nextDataMatch) {
     try {
       stateData = JSON.parse(nextDataMatch[1]);
-    } catch (e) {}
+      log.debug('spotify', 'Successfully parsed __NEXT_DATA__ payload');
+    } catch (e) {
+      log.warn('spotify', `Failed to parse __NEXT_DATA__ JSON: ${e.message}`);
+    }
   }
 
   if (!stateData) {
@@ -62,8 +66,15 @@ async function getPlaylistInfo(url) {
       try {
         const decodedJson = Buffer.from(scriptMatch[1], 'base64').toString('utf-8');
         stateData = JSON.parse(decodedJson);
-      } catch (e) {}
+        log.debug('spotify', 'Successfully parsed initial-state payload');
+      } catch (e) {
+        log.warn('spotify', `Failed to parse initial-state JSON: ${e.message}`);
+      }
     }
+  }
+
+  if (!stateData) {
+    log.warn('spotify', 'No structured data found in embed page — Spotify may have changed their HTML format');
   }
 
   let playlistTitle = `${type.toUpperCase()} ${id}`;
@@ -102,13 +113,18 @@ async function getPlaylistInfo(url) {
         });
       }
     } catch (e) {
-      // Fallback regex scraping if JSON structure differs
+      log.error('spotify', `Failed to extract entity from state data: ${e.message}`);
+      log.debug('spotify', 'State data keys:', Object.keys(stateData || {}));
     }
   }
 
-  // Fallback if initial-state parsing yielded 0 tracks
+  // Fallback if structured data parsing yielded 0 tracks
   if (tracks.length === 0) {
+    log.warn('spotify', 'Structured parsing returned 0 tracks, attempting regex fallback');
     tracks = extractTracksByRegexFallback(html, playlistTitle, coverUrl);
+    if (tracks.length === 0) {
+      log.warn('spotify', 'Regex fallback also returned 0 tracks — the playlist may be empty or Spotify changed their format');
+    }
   }
 
   return {
