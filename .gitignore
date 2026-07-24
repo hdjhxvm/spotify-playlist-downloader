@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Download outputs & test files
+*.mp3
+*.lrc
+downloads/
+temp/
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
