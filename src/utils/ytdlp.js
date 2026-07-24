@@ -134,7 +134,7 @@ async function downloadAudioStream(searchQuery, outputPath, quality = '320k', op
 
   return new Promise((resolve, reject) => {
     const args = [
-      `ytsearch1:${searchQuery}`,
+      `ytsearch3:${searchQuery}`,
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', quality.replace('k', ''),
@@ -187,9 +187,8 @@ async function downloadAudioStream(searchQuery, outputPath, quality = '320k', op
         }
         resolve(outputPath);
       } else if (code === 0 && !actualPath) {
-        log.error('ytdlp', `yt-dlp exited successfully but output file not found at: ${outputPath}`);
-        log.debug('ytdlp', `stderr: ${stderrData}`);
-        reject(new Error(`yt-dlp completed but output file not found. Expected: ${outputPath}`));
+        log.warn('ytdlp', `No output file found. This usually means yt-dlp skipped the video because it failed the Duration Match Filter.`);
+        reject(new Error(`Skipped by Duration Guard (The only YouTube video found had a wildly different duration than the official Spotify track, so we blocked it to save data/RAM).`));
       } else {
         log.error('ytdlp', `yt-dlp failed with code ${code}`);
         reject(new Error(`yt-dlp download failed with code ${code}: ${stderrData.trim()}`));
