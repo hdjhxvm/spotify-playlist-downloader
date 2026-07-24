@@ -142,6 +142,7 @@ async function downloadAudioStream(searchQuery, outputPath, quality = '320k', op
       '--no-playlist',
       '--no-cache-dir',
       '--no-mtime',
+      '--extractor-args', 'youtube:player_client=android',
       '--quiet',
       '--no-warnings'
     ];
