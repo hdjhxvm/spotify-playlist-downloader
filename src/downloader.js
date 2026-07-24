@@ -55,11 +55,12 @@ async function downloadTrack(track, options = {}) {
 
   // Clean filename
   const safeFilename = sanitizeFilename(`${track.artist} - ${track.title}`);
-  const mp3Path = path.join(outputDir, `${safeFilename}.mp3`);
+  const mp3FileName = `${safeFilename}.mp3`;
+  const mp3Path = path.join(outputDir, mp3FileName);
   const lrcPath = path.join(outputDir, `${safeFilename}.lrc`);
 
-  // Skip download if already exists
-  if (fs.existsSync(mp3Path)) {
+  // Skip download if already exists (O(1) RAM lookup if cache exists, fallback to Disk I/O)
+  if (options.existingFilesCache?.has(mp3FileName) || (!options.existingFilesCache && fs.existsSync(mp3Path))) {
     log.debug('downloader', `Skipping (already exists): ${safeFilename}`);
     return { track, success: true, filePath: mp3Path, skipped: true };
   }
@@ -156,6 +157,21 @@ async function downloadPlaylist(spotifyUrl, options = {}) {
     : path.join(process.cwd(), 'downloads', sanitizedTitle);
 
   log.debug('downloader', `Downloading ${total} tracks (concurrency: ${concurrent}, retries: ${maxRetries})`);
+
+  // Pre-Scan target directory for existing files to build O(1) lookup cache (Massive CPU/Disk I/O optimization)
+  const existingFilesCache = new Set();
+  if (fs.existsSync(targetDir)) {
+    try {
+      const files = fs.readdirSync(targetDir);
+      for (const f of files) {
+        existingFilesCache.add(f);
+      }
+      log.debug('downloader', `Pre-scanned ${existingFilesCache.size} existing files for fast skipping.`);
+    } catch (e) {
+      log.warn('downloader', `Could not pre-scan directory: ${e.message}`);
+    }
+  }
+  options.existingFilesCache = existingFilesCache;
 
   const tasks = playlistInfo.tracks.map((track, i) => {
     return async () => {
