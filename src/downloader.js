@@ -71,8 +71,9 @@ async function downloadTrack(track, options = {}) {
     }
 
     // 1. Download audio stream via yt-dlp
-    // Use Spotify's precise duration to filter out compilations, no need for aggressive keyword exclusion
-    const searchQuery = `${track.artist} ${track.title} official audio`;
+    // Use primary artist to avoid sponsor/feature noise in search (e.g. "Amr Diab, Orange" -> "Amr Diab")
+    const mainArtist = (track.artist || '').split(/[,;&]/)[0].trim();
+    const searchQuery = `${mainArtist} ${track.title} official audio`;
     await downloadAudioStream(searchQuery, mp3Path, quality, { durationMs: track.durationMs });
 
     if (options.onProgress) {
