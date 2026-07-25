@@ -74,7 +74,7 @@ async function downloadTrack(track, options = {}) {
     // Use primary artist and clean title (remove quotes/punctuation) to fix search fails (e.g. "Eta'akhar" -> "Eta akhar")
     const mainArtist = (track.artist || '').split(/[,;&]/)[0].trim();
     const cleanTitle = (track.title || '').replace(/['’`"-]/g, ' ').replace(/\s+/g, ' ').trim();
-    const searchQuery = `${mainArtist} ${cleanTitle} official audio`;
+    const searchQuery = `${mainArtist} ${cleanTitle}`;
     await downloadAudioStream(searchQuery, mp3Path, quality, { durationMs: track.durationMs });
 
     if (options.onProgress) {
