@@ -71,9 +71,10 @@ async function downloadTrack(track, options = {}) {
     }
 
     // 1. Download audio stream via yt-dlp
-    // Use primary artist to avoid sponsor/feature noise in search (e.g. "Amr Diab, Orange" -> "Amr Diab")
+    // Use primary artist and clean title (remove quotes/punctuation) to fix search fails (e.g. "Eta'akhar" -> "Eta akhar")
     const mainArtist = (track.artist || '').split(/[,;&]/)[0].trim();
-    const searchQuery = `${mainArtist} ${track.title} official audio`;
+    const cleanTitle = (track.title || '').replace(/['’`"-]/g, ' ').replace(/\s+/g, ' ').trim();
+    const searchQuery = `${mainArtist} ${cleanTitle} official audio`;
     await downloadAudioStream(searchQuery, mp3Path, quality, { durationMs: track.durationMs });
 
     if (options.onProgress) {
